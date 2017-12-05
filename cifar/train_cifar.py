@@ -8,19 +8,24 @@ from chainer.training import extensions
 
 from chainer.datasets import get_cifar10
 from chainer.datasets import get_cifar100
+from tensorboardX import SummaryWriter
 
-import models.VGG
+from models.alex import Alex
+from models.VGG import VGG
+from writetnesorboard import LogTensorboard
 
 
 def main():
     parser = argparse.ArgumentParser(description='Chainer CIFAR example:')
     parser.add_argument('--dataset', '-d', default='cifar10',
                         help='The dataset to use: cifar10 or cifar100')
+    parser.add_argument('--model', '-m', default='VGG',
+                        help='The model to use')
     parser.add_argument('--batchsize', '-b', type=int, default=64,
                         help='Number of images in each mini-batch')
     parser.add_argument('--learnrate', '-l', type=float, default=0.05,
                         help='Learning rate for SGD')
-    parser.add_argument('--epoch', '-e', type=int, default=300,
+    parser.add_argument('--epoch', '-e', type=int, default=150,
                         help='Number of sweeps over the dataset to train')
     parser.add_argument('--gpu', '-g', type=int, default=0,
                         help='GPU ID (negative value indicates CPU)')
@@ -28,12 +33,17 @@ def main():
                         help='Directory to output the result')
     parser.add_argument('--resume', '-r', default='',
                         help='Resume the training from snapshot')
+    parser.add_argument('--weight_decay', type=float, default=5e-4,
+                        help='weight_decay')
     args = parser.parse_args()
+
 
     print('GPU: {}'.format(args.gpu))
     print('# Minibatch-size: {}'.format(args.batchsize))
     print('# epoch: {}'.format(args.epoch))
     print('')
+
+    writer = SummaryWriter()
 
     # Set up a neural network to train.
     # Classifier reports softmax cross entropy loss and accuracy at every
@@ -48,7 +58,12 @@ def main():
         train, test = get_cifar100()
     else:
         raise RuntimeError('Invalid dataset choice.')
-    model = L.Classifier(models.VGG.VGG(class_labels))
+    if args.model == 'AlexNet':
+        model = L.Classifier(Alex(class_labels))
+    elif args.model == 'VGG':
+        model = L.Classifier(VGG(class_labels))
+    else:
+        raise Exception("Invalid model " + args.model)
     if args.gpu >= 0:
         # Make a specified GPU current
         chainer.cuda.get_device_from_id(args.gpu).use()
@@ -56,9 +71,9 @@ def main():
 
     optimizer = chainer.optimizers.MomentumSGD(args.learnrate)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(5e-4))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(args.weight_decay))
 
-    train_iter = chainer.iterators.SerialIterator(train, args.batchsize)
+    train_iter = chainer.iterators.MultiprocessIterator(train, args.batchsize, n_processes=4)
     test_iter = chainer.iterators.SerialIterator(test, args.batchsize,
                                                  repeat=False, shuffle=False)
     # Set up a trainer
@@ -81,6 +96,7 @@ def main():
 
     # Write a log of evaluation statistics for each epoch
     trainer.extend(extensions.LogReport())
+    trainer.extend(LogTensorboard(trigger=(1, 'epoch'), logger=writer))
 
     # Print selected entries of the log to stdout
     # Here "main" refers to the target link of the "main" optimizer again, and

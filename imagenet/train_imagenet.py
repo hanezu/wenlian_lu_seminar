@@ -100,7 +100,7 @@ def main():
                         help='Convnet architecture')
     parser.add_argument('--batchsize', '-B', type=int, default=32,
                         help='Learning minibatch size')
-    parser.add_argument('--epoch', '-E', type=int, default=10,
+    parser.add_argument('--epoch', '-E', type=int, default=200,
                         help='Number of epochs to train')
     parser.add_argument('--gpu', '-g', type=int, default=-1,
                         help='GPU ID (negative value indicates CPU')
@@ -147,7 +147,7 @@ def main():
         val, args.val_batchsize, repeat=False)
 
     # Set up an optimizer
-    optimizer = chainer.optimizers.MomentumSGD(lr=0.01, momentum=0.9)
+    optimizer = chainer.optimizers.Adam(0.004)
     optimizer.setup(model)
 
     # Set up a trainer
